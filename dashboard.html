@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dashboard – Amity University Raipur</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="sidebar-overlay" id="sidebarOverlay" onclick="closeSidebar()"></div>
+<div class="app-layout">
+  <aside class="sidebar" id="sidebar"></aside>
+  <div class="main-content">
+    <!-- Topbar -->
+    <div class="topbar">
+      <div class="topbar-left">
+        <button class="btn-menu-toggle" onclick="toggleSidebar()"><i class="bi bi-list"></i></button>
+        <div>
+          <div class="topbar-title">Dashboard</div>
+          <div class="topbar-subtitle" id="dateStr"></div>
+        </div>
+      </div>
+      <div class="topbar-right">
+        <span class="topbar-badge d-none d-sm-inline"><i class="bi bi-circle-fill text-success me-1" style="font-size:8px"></i>System Online</span>
+        <div class="d-flex align-items-center gap-2">
+          <div id="topUserAvatar" class="avatar-sm bg-primary"></div>
+          <div class="d-none d-md-block">
+            <div style="font-size:13px;font-weight:600" id="topUserName"></div>
+            <div style="font-size:11px;color:var(--text-muted)" id="topUserRole"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="page-content">
+      <!-- Stats -->
+      <div class="row g-3 mb-4" id="statsRow"></div>
+
+      <!-- Charts + Quick Info -->
+      <div class="row g-3 mb-4" id="chartsRow"></div>
+
+      <!-- Bottom Row -->
+      <div class="row g-3" id="bottomRow"></div>
+    </div>
+  </div>
+</div>
+<div class="toast-msg" id="toast"></div>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="app.js"></script>
+<script>
+  const user = Auth.guard();
+  document.getElementById('sidebar').innerHTML = renderSidebar('dashboard');
+  document.getElementById('topUserName').textContent = user.name;
+  document.getElementById('topUserRole').textContent = user.role.charAt(0).toUpperCase() + user.role.slice(1);
+  document.getElementById('topUserAvatar').textContent = getInitials(user.name);
+  document.getElementById('dateStr').textContent = new Date().toLocaleDateString('en-IN', { weekday:'long', day:'2-digit', month:'long', year:'numeric' });
+
+  const students = DB.get('students') || [];
+  const faculty = DB.get('faculty') || [];
+  const courses = DB.get('courses') || [];
+  const notices = DB.get('notices') || [];
+  const grades = DB.get('grades') || [];
+  const attendance = DB.get('attendance') || [];
+
+  // ── STATS ──
+  const statsConfig = {
+    admin: [
+      { icon: 'bi-mortarboard-fill', color: 'blue', value: students.length, label: 'Total Students', change: '+2 this month', dir: 'up' },
+      { icon: 'bi-person-workspace', color: 'purple', value: faculty.length, label: 'Faculty Members', change: 'All active', dir: 'up' },
+      { icon: 'bi-book-fill', color: 'green', value: courses.length, label: 'Active Courses', change: 'This semester', dir: 'up' },
+      { icon: 'bi-cash-coin', color: 'orange', value: students.filter(s=>s.fees==='pending').length, label: 'Pending Fees', change: 'Needs attention', dir: 'down' },
+    ],
+    faculty: [
+      { icon: 'bi-book-fill', color: 'blue', value: courses.filter(c=>c.faculty===user.name).length, label: 'My Courses', change: 'This semester', dir: 'up' },
+      { icon: 'bi-mortarboard-fill', color: 'purple', value: students.filter(s=>s.status==='active').length, label: 'Active Students', change: 'Enrolled', dir: 'up' },
+      { icon: 'bi-calendar-check-fill', color: 'green', value: attendance.length, label: 'Attendance Records', change: 'Total marked', dir: 'up' },
+      { icon: 'bi-megaphone-fill', color: 'orange', value: notices.filter(n=>n.target==='faculty'||n.target==='all').length, label: 'Notices', change: 'For you', dir: 'up' },
+    ],
+    student: [
+      { icon: 'bi-book-fill', color: 'blue', value: courses.filter(c=>c.semester===user.semester).length, label: 'My Courses', change: `Semester ${user.semester}`, dir: 'up' },
+      { icon: 'bi-calendar-check-fill', color: 'green', value: attendance.filter(a=>a.studentId===user.id&&a.status==='present').length, label: 'Classes Present', change: 'Total present', dir: 'up' },
+      { icon: 'bi-bar-chart-fill', color: 'purple', value: grades.filter(g=>g.studentId===user.id).length, label: 'Grades Available', change: 'Subjects graded', dir: 'up' },
+      { icon: 'bi-megaphone-fill', color: 'orange', value: notices.filter(n=>n.target==='students'||n.target==='all').length, label: 'Notices', change: 'Unread', dir: 'up' },
+    ]
+  };
+
+  document.getElementById('statsRow').innerHTML = (statsConfig[user.role]||[]).map(s => `
+    <div class="col-6 col-xl-3">
+      <div class="stat-card ${s.color}">
+        <div class="stat-icon ${s.color}"><i class="bi ${s.icon}"></i></div>
+        <div class="stat-value">${s.value}</div>
+        <div class="stat-label">${s.label}</div>
+        <div class="stat-change ${s.dir}"><i class="bi bi-arrow-${s.dir}-short"></i>${s.change}</div>
+      </div>
+    </div>`).join('');
+
+  // ── CHARTS ROW ──
+  if (user.role === 'admin') {
+    document.getElementById('chartsRow').innerHTML = `
+      <div class="col-md-7">
+        <div class="card-custom h-100">
+          <div class="card-header-custom2"><h5><i class="bi bi-bar-chart-fill"></i>Student Enrollment by Course</h5></div>
+          <div class="card-body-custom"><div class="chart-container"><canvas id="enrollChart"></canvas></div></div>
+        </div>
+      </div>
+      <div class="col-md-5">
+        <div class="card-custom h-100">
+          <div class="card-header-custom2"><h5><i class="bi bi-pie-chart-fill"></i>Fees Status</h5></div>
+          <div class="card-body-custom"><div class="chart-container"><canvas id="feesChart"></canvas></div></div>
+        </div>
+      </div>`;
+
+    const courseCounts = {};
+    students.forEach(s => { courseCounts[s.course] = (courseCounts[s.course]||0)+1; });
+    new Chart(document.getElementById('enrollChart'), {
+      type: 'bar',
+      data: { labels: Object.keys(courseCounts), datasets: [{ label: 'Students', data: Object.values(courseCounts), backgroundColor: ['#4f46e5','#10b981','#f59e0b','#ef4444','#3b82f6'], borderRadius: 8, borderSkipped: false }] },
+      options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, grid: { color: '#f1f5f9' } }, x: { grid: { display: false } } } }
+    });
+    const paid = students.filter(s=>s.fees==='paid').length;
+    const pending = students.filter(s=>s.fees==='pending').length;
+    new Chart(document.getElementById('feesChart'), {
+      type: 'doughnut',
+      data: { labels: ['Paid','Pending'], datasets: [{ data: [paid, pending], backgroundColor: ['#10b981','#ef4444'], borderWidth: 0, hoverOffset: 6 }] },
+      options: { responsive: true, maintainAspectRatio: false, cutout: '70%', plugins: { legend: { position: 'bottom', labels: { padding: 16, font: { size: 12 } } } } }
+    });
+  } else if (user.role === 'faculty') {
+    const myCourses = courses.filter(c=>c.faculty===user.name);
+    const attData = myCourses.map(c => {
+      const total = attendance.filter(a=>a.courseId===c.id).length;
+      const present = attendance.filter(a=>a.courseId===c.id&&a.status==='present').length;
+      return { name: c.code, pct: total ? Math.round(present/total*100) : 0 };
+    });
+    document.getElementById('chartsRow').innerHTML = `
+      <div class="col-md-7">
+        <div class="card-custom h-100">
+          <div class="card-header-custom2"><h5><i class="bi bi-bar-chart-fill"></i>Attendance % by Course</h5></div>
+          <div class="card-body-custom"><div class="chart-container"><canvas id="attChart"></canvas></div></div>
+        </div>
+      </div>
+      <div class="col-md-5">
+        <div class="card-custom h-100">
+          <div class="card-header-custom2"><h5><i class="bi bi-info-circle-fill"></i>My Profile</h5></div>
+          <div class="card-body-custom">
+            <div class="d-flex align-items-center gap-3 mb-3">
+              <div class="user-avatar bg-success" style="width:52px;height:52px;border-radius:14px;font-size:18px">${getInitials(user.name)}</div>
+              <div><div style="font-weight:700;font-size:15px">${user.name}</div><div style="color:var(--text-muted);font-size:12px">${user.dept}</div></div>
+            </div>
+            <div class="d-flex flex-column gap-2">
+              <div class="d-flex justify-content-between py-2 border-bottom"><span style="font-size:12px;color:var(--text-muted)">Subject</span><span style="font-size:12px;font-weight:600">${user.subject}</span></div>
+              <div class="d-flex justify-content-between py-2 border-bottom"><span style="font-size:12px;color:var(--text-muted)">Courses Assigned</span><span style="font-size:12px;font-weight:600">${myCourses.length}</span></div>
+              <div class="d-flex justify-content-between py-2"><span style="font-size:12px;color:var(--text-muted)">Status</span><span class="badge-custom badge-success">Active</span></div>
+            </div>
+          </div>
+        </div>
+      </div>`;
+    new Chart(document.getElementById('attChart'), {
+      type: 'bar',
+      data: { labels: attData.map(d=>d.name), datasets: [{ label: 'Attendance %', data: attData.map(d=>d.pct), backgroundColor: attData.map(d=>d.pct>=75?'#10b981':d.pct>=50?'#f59e0b':'#ef4444'), borderRadius: 8, borderSkipped: false }] },
+      options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, max: 100, grid: { color: '#f1f5f9' } }, x: { grid: { display: false } } } }
+    });
+  } else {
+    const myGrades = grades.filter(g=>g.studentId===user.id);
+    const myAtt = attendance.filter(a=>a.studentId===user.id);
+    const present = myAtt.filter(a=>a.status==='present').length;
+    const absent = myAtt.filter(a=>a.status==='absent').length;
+    document.getElementById('chartsRow').innerHTML = `
+      <div class="col-md-6">
+        <div class="card-custom h-100">
+          <div class="card-header-custom2"><h5><i class="bi bi-bar-chart-fill"></i>My Grades</h5></div>
+          <div class="card-body-custom"><div class="chart-container"><canvas id="gradeChart"></canvas></div></div>
+        </div>
+      </div>
+      <div class="col-md-6">
+        <div class="card-custom h-100">
+          <div class="card-header-custom2"><h5><i class="bi bi-pie-chart-fill"></i>My Attendance</h5></div>
+          <div class="card-body-custom"><div class="chart-container"><canvas id="attPieChart"></canvas></div></div>
+        </div>
+      </div>`;
+    new Chart(document.getElementById('gradeChart'), {
+      type: 'bar',
+      data: { labels: myGrades.map(g=>{ const c=courses.find(x=>x.id===g.courseId); return c?.code||''; }), datasets: [{ label: 'Marks', data: myGrades.map(g=>g.total), backgroundColor: '#4f46e5', borderRadius: 8, borderSkipped: false }] },
+      options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, max: 100, grid: { color: '#f1f5f9' } }, x: { grid: { display: false } } } }
+    });
+    new Chart(document.getElementById('attPieChart'), {
+      type: 'doughnut',
+      data: { labels: ['Present','Absent'], datasets: [{ data: [present||0, absent||0], backgroundColor: ['#10b981','#ef4444'], borderWidth: 0, hoverOffset: 6 }] },
+      options: { responsive: true, maintainAspectRatio: false, cutout: '70%', plugins: { legend: { position: 'bottom', labels: { padding: 16, font: { size: 12 } } } } }
+    });
+  }
+
+  // ── BOTTOM ROW ──
+  const recentNotices = notices.filter(n=>n.target==='all'||n.target===user.role||user.role==='admin').slice(0,3);
+  const recentStudents = students.slice(-4).reverse();
+  document.getElementById('bottomRow').innerHTML = `
+    <div class="col-md-7">
+      <div class="card-custom">
+        <div class="card-header-custom2">
+          <h5><i class="bi bi-megaphone-fill"></i>Recent Notices</h5>
+          <a href="notices.html" class="btn-custom btn-outline-custom btn-sm-custom">View All</a>
+        </div>
+        <div class="card-body-custom p-0">
+          ${recentNotices.map(n=>`
+            <div class="d-flex align-items-start gap-3 p-3 border-bottom">
+              <div class="stat-icon ${n.type==='urgent'?'red':n.type==='info'?'blue':'green'}" style="width:36px;height:36px;border-radius:9px;font-size:14px;flex-shrink:0">
+                <i class="bi ${n.type==='urgent'?'bi-exclamation-triangle-fill':n.type==='info'?'bi-info-circle-fill':'bi-bell-fill'}"></i>
+              </div>
+              <div class="flex-1 overflow-hidden">
+                <div style="font-size:13px;font-weight:600;color:var(--text)">${n.title}</div>
+                <div style="font-size:12px;color:var(--text-muted);margin-top:2px">${n.content.slice(0,80)}...</div>
+                <div style="font-size:11px;color:var(--text-muted);margin-top:4px"><i class="bi bi-calendar3 me-1"></i>${formatDate(n.date)}</div>
+              </div>
+            </div>`).join('')}
+        </div>
+      </div>
+    </div>
+    <div class="col-md-5">
+      <div class="card-custom">
+        <div class="card-header-custom2">
+          <h5><i class="bi bi-people-fill"></i>${user.role==='student'?'Quick Info':'Recent Students'}</h5>
+        </div>
+        <div class="card-body-custom">
+          ${user.role==='student' ? `
+            <div class="d-flex flex-column gap-3">
+              <div class="d-flex justify-content-between align-items-center p-3 rounded-3" style="background:#f8fafc">
+                <span style="font-size:13px;color:var(--text-muted)">Roll Number</span>
+                <span style="font-size:13px;font-weight:700">${user.rollNo}</span>
+              </div>
+              <div class="d-flex justify-content-between align-items-center p-3 rounded-3" style="background:#f8fafc">
+                <span style="font-size:13px;color:var(--text-muted)">Course</span>
+                <span style="font-size:13px;font-weight:700">${user.course}</span>
+              </div>
+              <div class="d-flex justify-content-between align-items-center p-3 rounded-3" style="background:#f8fafc">
+                <span style="font-size:13px;color:var(--text-muted)">Semester</span>
+                <span style="font-size:13px;font-weight:700">Semester ${user.semester}</span>
+              </div>
+              <div class="d-flex justify-content-between align-items-center p-3 rounded-3" style="background:#f8fafc">
+                <span style="font-size:13px;color:var(--text-muted)">Status</span>
+                <span class="badge-custom badge-success">Active</span>
+              </div>
+            </div>` :
+          recentStudents.map(s=>`
+            <div class="d-flex align-items-center gap-3 mb-3">
+              <div class="avatar-sm" style="background:${['#4f46e5','#10b981','#f59e0b','#ef4444'][s.id%4]}">${getInitials(s.name)}</div>
+              <div class="flex-1">
+                <div style="font-size:13px;font-weight:600">${s.name}</div>
+                <div style="font-size:11px;color:var(--text-muted)">${s.rollNo} · ${s.course}</div>
+              </div>
+              <span class="badge-custom ${s.status==='active'?'badge-success':'badge-danger'}">${s.status}</span>
+            </div>`).join('')}
+        </div>
+      </div>
+    </div>`;
+
+  function toggleSidebar() {
+    document.getElementById('sidebar').classList.toggle('open');
+    document.getElementById('sidebarOverlay').classList.toggle('show');
+  }
+  function closeSidebar() {
+    document.getElementById('sidebar').classList.remove('open');
+    document.getElementById('sidebarOverlay').classList.remove('show');
+  }
+</script>
+</body>
+</html>

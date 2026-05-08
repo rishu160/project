@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Grades – Amity University Raipur</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="sidebar-overlay" id="sidebarOverlay" onclick="closeSidebar()"></div>
+<div class="app-layout">
+  <aside class="sidebar" id="sidebar"></aside>
+  <div class="main-content">
+    <div class="topbar">
+      <div class="topbar-left">
+        <button class="btn-menu-toggle" onclick="toggleSidebar()"><i class="bi bi-list"></i></button>
+        <div><div class="topbar-title">Grades & Results</div><div class="topbar-subtitle">Academic performance records</div></div>
+      </div>
+      <div class="topbar-right" id="addBtn"></div>
+    </div>
+    <div class="page-content" id="pageContent"></div>
+  </div>
+</div>
+
+<div class="modal-overlay hidden" id="modal">
+  <div class="modal-box">
+    <div class="modal-header-custom">
+      <h5 id="modalTitle"><i class="bi bi-plus-circle-fill me-2"></i>Add Grade</h5>
+      <button class="modal-close-btn" onclick="closeModal()"><i class="bi bi-x-lg"></i></button>
+    </div>
+    <div class="modal-body-custom">
+      <input type="hidden" id="fId">
+      <div class="row g-3">
+        <div class="col-12"><div class="form-group-custom"><label class="form-label-custom">Student *</label><select id="fStudent" class="form-control-inner"></select></div></div>
+        <div class="col-12"><div class="form-group-custom"><label class="form-label-custom">Course *</label><select id="fCourse" class="form-control-inner"></select></div></div>
+        <div class="col-6"><div class="form-group-custom"><label class="form-label-custom">Internal Marks (max 40)</label><input id="fInternal" type="number" min="0" max="40" class="form-control-inner" placeholder="0–40" oninput="updatePreview()"></div></div>
+        <div class="col-6"><div class="form-group-custom"><label class="form-label-custom">External Marks (max 60)</label><input id="fExternal" type="number" min="0" max="60" class="form-control-inner" placeholder="0–60" oninput="updatePreview()"></div></div>
+        <div class="col-12"><div class="form-group-custom"><label class="form-label-custom">Semester</label><select id="fSem" class="form-control-inner"><option>1</option><option>2</option><option>3</option><option>4</option><option>5</option><option>6</option><option>7</option><option>8</option></select></div></div>
+        <div class="col-12">
+          <div id="gradePreview" class="p-3 rounded-3" style="background:#f8fafc;border:1px solid var(--border);display:none">
+            <div class="d-flex justify-content-between align-items-center">
+              <span style="font-size:13px;color:var(--text-muted)">Total Marks</span>
+              <span id="previewTotal" style="font-size:18px;font-weight:800;color:var(--primary)">0/100</span>
+            </div>
+            <div class="d-flex justify-content-between align-items-center mt-2">
+              <span style="font-size:13px;color:var(--text-muted)">Grade</span>
+              <span id="previewGrade" class="badge-custom" style="font-size:16px;padding:6px 16px"></span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer-custom">
+      <button class="btn-custom btn-outline-custom" onclick="closeModal()">Cancel</button>
+      <button class="btn-custom btn-primary-custom" onclick="save()"><i class="bi bi-check-lg me-1"></i>Save Grade</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast-msg" id="toast"></div>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="app.js"></script>
+<script>
+  const user = Auth.guard();
+  document.getElementById('sidebar').innerHTML = renderSidebar('grades');
+  const students=DB.get('students')||[], courses=DB.get('courses')||[];
+  function getGrades(){return DB.get('grades')||[];}
+
+  function calcGrade(t){if(t>=90)return'A+';if(t>=80)return'A';if(t>=70)return'B+';if(t>=60)return'B';if(t>=50)return'C';if(t>=40)return'D';return'F';}
+  function gradeClass(g){if(['A+','A'].includes(g))return'badge-success';if(['B+','B'].includes(g))return'badge-info';if(g==='C')return'badge-warning';return'badge-danger';}
+
+  function updatePreview() {
+    const i=+document.getElementById('fInternal').value||0, e=+document.getElementById('fExternal').value||0;
+    const total=i+e, grade=calcGrade(total);
+    document.getElementById('gradePreview').style.display='block';
+    document.getElementById('previewTotal').textContent=total+'/100';
+    document.getElementById('previewGrade').textContent=grade;
+    document.getElementById('previewGrade').className='badge-custom '+gradeClass(grade);
+  }
+
+  // ── ADMIN/FACULTY ──
+  function renderAdminView() {
+    if(user.role!=='student') document.getElementById('addBtn').innerHTML='<button class="btn-custom btn-primary-custom" onclick="openModal()"><i class="bi bi-plus-lg"></i><span class="d-none d-sm-inline">Add Grade</span></button>';
+    const grades=getGrades();
+    const avg=grades.length?Math.round(grades.reduce((s,g)=>s+g.total,0)/grades.length):0;
+    document.getElementById('pageContent').innerHTML=`
+      <div class="row g-3 mb-4">
+        <div class="col-6 col-md-3"><div class="stat-card blue"><div class="stat-icon blue"><i class="bi bi-file-earmark-text-fill"></i></div><div class="stat-value">${grades.length}</div><div class="stat-label">Total Records</div></div></div>
+        <div class="col-6 col-md-3"><div class="stat-card green"><div class="stat-icon green"><i class="bi bi-trophy-fill"></i></div><div class="stat-value">${grades.filter(g=>['A+','A'].includes(g.grade)).length}</div><div class="stat-label">A Grade</div></div></div>
+        <div class="col-6 col-md-3"><div class="stat-card orange"><div class="stat-icon orange"><i class="bi bi-graph-up"></i></div><div class="stat-value">${avg}</div><div class="stat-label">Avg Score</div></div></div>
+        <div class="col-6 col-md-3"><div class="stat-card red"><div class="stat-icon red"><i class="bi bi-exclamation-triangle-fill"></i></div><div class="stat-value">${grades.filter(g=>g.grade==='F').length}</div><div class="stat-label">Failed</div></div></div>
+      </div>
+      <div class="card-custom">
+        <div class="card-header-custom2"><h5><i class="bi bi-table"></i>All Grade Records</h5><span class="badge-custom badge-primary">${grades.length} records</span></div>
+        <div class="card-body-custom">
+          <div class="search-row">
+            <div class="search-input-wrap"><i class="bi bi-search"></i><input type="text" class="search-input" id="search" placeholder="Search student..." oninput="filterTable()"></div>
+            <select class="filter-select" id="filterSem" onchange="filterTable()"><option value="">All Semesters</option>${[1,2,3,4,5,6,7,8].map(s=>`<option>${s}</option>`).join('')}</select>
+          </div>
+          <div class="table-wrap">
+            <table class="table-custom" id="gradeTable">
+              <thead><tr><th>#</th><th>Student</th><th>Course</th><th>Internal</th><th>External</th><th>Total</th><th>Grade</th><th>Semester</th><th>Actions</th></tr></thead>
+              <tbody>${grades.map((g,i)=>{
+                const st=students.find(s=>s.id===g.studentId), co=courses.find(c=>c.id===g.courseId);
+                return `<tr>
+                  <td style="color:var(--text-muted);font-size:12px">${i+1}</td>
+                  <td><div class="d-flex align-items-center gap-2"><div class="avatar-sm" style="background:#4f46e5;width:28px;height:28px;font-size:10px">${getInitials(st?.name||'?')}</div><div><div style="font-size:13px;font-weight:600">${st?.name||'Unknown'}</div><div style="font-size:11px;color:var(--text-muted)">${st?.rollNo||''}</div></div></div></td>
+                  <td style="font-size:12px">${co?.code||''} – ${co?.name||'Unknown'}</td>
+                  <td><span class="badge-custom badge-secondary">${g.internal}/40</span></td>
+                  <td><span class="badge-custom badge-secondary">${g.external}/60</span></td>
+                  <td><strong style="font-size:14px;color:var(--primary)">${g.total}/100</strong></td>
+                  <td><span class="badge-custom ${gradeClass(g.grade)}" style="font-size:13px;font-weight:700">${g.grade}</span></td>
+                  <td><span class="badge-custom badge-secondary">Sem ${g.semester}</span></td>
+                  <td><div class="d-flex gap-1"><button class="btn-custom btn-outline-custom btn-sm-custom btn-icon" onclick="edit(${g.id})"><i class="bi bi-pencil-fill"></i></button><button class="btn-custom btn-danger-custom btn-sm-custom btn-icon" onclick="del(${g.id})"><i class="bi bi-trash-fill"></i></button></div></td>
+                </tr>`;
+              }).join('')||'<tr><td colspan="9" class="text-center py-5" style="color:var(--text-muted)"><i class="bi bi-inbox display-6 d-block mb-2"></i>No grades found</td></tr>'}</tbody>
+            </table>
+          </div>
+        </div>
+      </div>`;
+  }
+
+  function filterTable() {
+    const q=document.getElementById('search').value.toLowerCase(), fs=document.getElementById('filterSem').value;
+    document.querySelectorAll('#gradeTable tbody tr').forEach(tr=>{
+      tr.style.display=(!q||tr.textContent.toLowerCase().includes(q))&&(!fs||tr.cells[7]?.textContent.includes(fs))?'':'none';
+    });
+  }
+
+  // ── STUDENT ──
+  function renderStudentView() {
+    const grades=getGrades().filter(g=>g.studentId===user.id);
+    const avg=grades.length?Math.round(grades.reduce((s,g)=>s+g.total,0)/grades.length):0;
+    const overallGrade=calcGrade(avg);
+    document.getElementById('pageContent').innerHTML=`
+      <div class="row g-3 mb-4">
+        <div class="col-6 col-md-3"><div class="stat-card blue"><div class="stat-icon blue"><i class="bi bi-book-fill"></i></div><div class="stat-value">${grades.length}</div><div class="stat-label">Subjects</div></div></div>
+        <div class="col-6 col-md-3"><div class="stat-card green"><div class="stat-icon green"><i class="bi bi-graph-up-arrow"></i></div><div class="stat-value">${avg}</div><div class="stat-label">Avg Score</div></div></div>
+        <div class="col-6 col-md-3"><div class="stat-card purple"><div class="stat-icon purple"><i class="bi bi-trophy-fill"></i></div><div class="stat-value">${overallGrade}</div><div class="stat-label">Overall Grade</div></div></div>
+        <div class="col-6 col-md-3"><div class="stat-card orange"><div class="stat-icon orange"><i class="bi bi-star-fill"></i></div><div class="stat-value">${grades.filter(g=>['A+','A'].includes(g.grade)).length}</div><div class="stat-label">A Grades</div></div></div>
+      </div>
+      <div class="row g-3">
+        <div class="col-md-7">
+          <div class="card-custom">
+            <div class="card-header-custom2"><h5><i class="bi bi-card-list"></i>My Grade Card</h5></div>
+            <div class="card-body-custom p-0">
+              <div class="table-wrap"><table class="table-custom">
+                <thead><tr><th>#</th><th>Course</th><th>Internal</th><th>External</th><th>Total</th><th>Grade</th></tr></thead>
+                <tbody>${grades.map((g,i)=>{
+                  const co=courses.find(c=>c.id===g.courseId);
+                  return `<tr>
+                    <td style="color:var(--text-muted);font-size:12px">${i+1}</td>
+                    <td><div style="font-weight:600;font-size:13px">${co?.code||''}</div><div style="font-size:11px;color:var(--text-muted)">${co?.name||'Unknown'}</div></td>
+                    <td><span class="badge-custom badge-secondary">${g.internal}/40</span></td>
+                    <td><span class="badge-custom badge-secondary">${g.external}/60</span></td>
+                    <td><strong style="color:var(--primary)">${g.total}/100</strong></td>
+                    <td><span class="badge-custom ${gradeClass(g.grade)}" style="font-size:13px;font-weight:700">${g.grade}</span></td>
+                  </tr>`;
+                }).join('')||'<tr><td colspan="6" class="text-center py-4" style="color:var(--text-muted)">No grades available</td></tr>'}</tbody>
+              </table></div>
+            </div>
+          </div>
+        </div>
+        <div class="col-md-5">
+          <div class="card-custom">
+            <div class="card-header-custom2"><h5><i class="bi bi-bar-chart-fill"></i>Performance Chart</h5></div>
+            <div class="card-body-custom"><div class="chart-container"><canvas id="perfChart"></canvas></div></div>
+          </div>
+        </div>
+      </div>`;
+    if(grades.length) {
+      new Chart(document.getElementById('perfChart'),{
+        type:'bar',
+        data:{labels:grades.map(g=>{const c=courses.find(x=>x.id===g.courseId);return c?.code||'';}),datasets:[{label:'Marks',data:grades.map(g=>g.total),backgroundColor:grades.map(g=>g.total>=80?'#10b981':g.total>=60?'#4f46e5':'#ef4444'),borderRadius:8,borderSkipped:false}]},
+        options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{beginAtZero:true,max:100,grid:{color:'#f1f5f9'}},x:{grid:{display:false}}}}
+      });
+    }
+  }
+
+  function openModal(data=null) {
+    document.getElementById('fStudent').innerHTML=students.map(s=>`<option value="${s.id}">${s.name} (${s.rollNo})</option>`).join('');
+    document.getElementById('fCourse').innerHTML=courses.map(c=>`<option value="${c.id}">${c.code} – ${c.name}</option>`).join('');
+    document.getElementById('modalTitle').innerHTML=`<i class="bi bi-${data?'pencil':'plus'}-circle-fill me-2"></i>${data?'Edit':'Add'} Grade`;
+    document.getElementById('fId').value=data?.id||''; document.getElementById('fStudent').value=data?.studentId||'';
+    document.getElementById('fCourse').value=data?.courseId||''; document.getElementById('fInternal').value=data?.internal||'';
+    document.getElementById('fExternal').value=data?.external||''; document.getElementById('fSem').value=data?.semester||'1';
+    document.getElementById('gradePreview').style.display='none';
+    document.getElementById('modal').classList.remove('hidden');
+    if(data) updatePreview();
+  }
+  function closeModal(){document.getElementById('modal').classList.add('hidden');}
+  function edit(id){openModal(getGrades().find(g=>g.id===id));}
+  function save(){
+    const studentId=+document.getElementById('fStudent').value, courseId=+document.getElementById('fCourse').value;
+    const internal=+document.getElementById('fInternal').value, external=+document.getElementById('fExternal').value;
+    if(!studentId||!courseId){toast('Please fill required fields','error');return;}
+    if(internal>40||external>60){toast('Marks exceed maximum limit','error');return;}
+    const total=internal+external, grade=calcGrade(total), arr=getGrades(), id=document.getElementById('fId').value;
+    const obj={studentId,courseId,internal,external,total,grade,semester:+document.getElementById('fSem').value};
+    if(id){const idx=arr.findIndex(g=>g.id===+id);arr[idx]={...arr[idx],...obj};toast('Grade updated!');}
+    else{arr.push({id:genId(arr),...obj});toast('Grade added!');}
+    DB.set('grades',arr);closeModal();
+    if(user.role==='student')renderStudentView();else renderAdminView();
+  }
+  function del(id){if(!confirm('Delete this grade?'))return;DB.set('grades',getGrades().filter(g=>g.id!==id));toast('Grade deleted','error');renderAdminView();}
+  function toggleSidebar(){document.getElementById('sidebar').classList.toggle('open');document.getElementById('sidebarOverlay').classList.toggle('show');}
+  function closeSidebar(){document.getElementById('sidebar').classList.remove('open');document.getElementById('sidebarOverlay').classList.remove('show');}
+  if(user.role==='student')renderStudentView();else renderAdminView();
+</script>
+</body>
+</html>

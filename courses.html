@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Courses – Amity University Raipur</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="sidebar-overlay" id="sidebarOverlay" onclick="closeSidebar()"></div>
+<div class="app-layout">
+  <aside class="sidebar" id="sidebar"></aside>
+  <div class="main-content">
+    <div class="topbar">
+      <div class="topbar-left">
+        <button class="btn-menu-toggle" onclick="toggleSidebar()"><i class="bi bi-list"></i></button>
+        <div><div class="topbar-title">Course Management</div><div class="topbar-subtitle">Manage academic courses</div></div>
+      </div>
+      <div class="topbar-right" id="addBtn"></div>
+    </div>
+    <div class="page-content">
+      <div class="row g-3 mb-4">
+        <div class="col-6 col-md-3"><div class="stat-card blue"><div class="stat-icon blue"><i class="bi bi-book-fill"></i></div><div class="stat-value" id="totalCourses">0</div><div class="stat-label">Total Courses</div></div></div>
+        <div class="col-6 col-md-3"><div class="stat-card green"><div class="stat-icon green"><i class="bi bi-layers-fill"></i></div><div class="stat-value" id="coreCourses">0</div><div class="stat-label">Core Courses</div></div></div>
+        <div class="col-6 col-md-3"><div class="stat-card purple"><div class="stat-icon purple"><i class="bi bi-building-fill"></i></div><div class="stat-value" id="deptCourses">0</div><div class="stat-label">Departments</div></div></div>
+        <div class="col-6 col-md-3"><div class="stat-card orange"><div class="stat-icon orange"><i class="bi bi-star-fill"></i></div><div class="stat-value" id="totalCredits">0</div><div class="stat-label">Total Credits</div></div></div>
+      </div>
+      <div class="card-custom">
+        <div class="card-header-custom2">
+          <h5><i class="bi bi-table"></i>All Courses</h5>
+          <span class="badge-custom badge-primary" id="countBadge"></span>
+        </div>
+        <div class="card-body-custom">
+          <div class="search-row">
+            <div class="search-input-wrap"><i class="bi bi-search"></i><input type="text" class="search-input" id="search" placeholder="Search by name, code..." oninput="render()"></div>
+            <select class="filter-select" id="filterDept" onchange="render()"><option value="">All Departments</option><option>Computer Science</option><option>Mathematics</option><option>Physics</option><option>Electronics</option></select>
+            <select class="filter-select" id="filterSem" onchange="render()"><option value="">All Semesters</option><option>1</option><option>2</option><option>3</option><option>4</option><option>5</option><option>6</option><option>7</option><option>8</option></select>
+          </div>
+          <div class="table-wrap">
+            <table class="table-custom">
+              <thead><tr><th>#</th><th>Code</th><th>Course Name</th><th>Department</th><th>Credits</th><th>Semester</th><th>Faculty</th><th>Type</th><th>Actions</th></tr></thead>
+              <tbody id="tbody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay hidden" id="modal">
+  <div class="modal-box">
+    <div class="modal-header-custom">
+      <h5 id="modalTitle"><i class="bi bi-book-fill me-2"></i>Add Course</h5>
+      <button class="modal-close-btn" onclick="closeModal()"><i class="bi bi-x-lg"></i></button>
+    </div>
+    <div class="modal-body-custom">
+      <input type="hidden" id="fId">
+      <div class="row g-3">
+        <div class="col-6"><div class="form-group-custom"><label class="form-label-custom">Course Code *</label><input id="fCode" class="form-control-inner" placeholder="e.g. CS301"></div></div>
+        <div class="col-6"><div class="form-group-custom"><label class="form-label-custom">Course Name *</label><input id="fName" class="form-control-inner" placeholder="Course name"></div></div>
+        <div class="col-6"><div class="form-group-custom"><label class="form-label-custom">Department *</label><select id="fDept" class="form-control-inner"><option>Computer Science</option><option>Mathematics</option><option>Physics</option><option>Electronics</option></select></div></div>
+        <div class="col-6"><div class="form-group-custom"><label class="form-label-custom">Credits</label><select id="fCredits" class="form-control-inner"><option>1</option><option>2</option><option>3</option><option>4</option><option>5</option></select></div></div>
+        <div class="col-6"><div class="form-group-custom"><label class="form-label-custom">Semester</label><select id="fSem" class="form-control-inner"><option>1</option><option>2</option><option>3</option><option>4</option><option>5</option><option>6</option><option>7</option><option>8</option></select></div></div>
+        <div class="col-6"><div class="form-group-custom"><label class="form-label-custom">Type</label><select id="fType" class="form-control-inner"><option>Core</option><option>Elective</option><option>Lab</option></select></div></div>
+        <div class="col-12"><div class="form-group-custom"><label class="form-label-custom">Assigned Faculty</label><select id="fFaculty" class="form-control-inner"></select></div></div>
+      </div>
+    </div>
+    <div class="modal-footer-custom">
+      <button class="btn-custom btn-outline-custom" onclick="closeModal()">Cancel</button>
+      <button class="btn-custom btn-primary-custom" onclick="save()"><i class="bi bi-check-lg me-1"></i>Save Course</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast-msg" id="toast"></div>
+<script src="app.js"></script>
+<script>
+  const user = Auth.guard();
+  document.getElementById('sidebar').innerHTML = renderSidebar('courses');
+  if (user.role==='admin') document.getElementById('addBtn').innerHTML = '<button class="btn-custom btn-primary-custom" onclick="openModal()"><i class="bi bi-plus-lg"></i><span class="d-none d-sm-inline">Add Course</span></button>';
+
+  function getData() {
+    let d = DB.get('courses')||[];
+    if(user.role==='faculty') d=d.filter(c=>c.faculty===user.name);
+    if(user.role==='student') d=d.filter(c=>c.semester===user.semester);
+    return d;
+  }
+
+  function updateSummary() {
+    const all = getData();
+    document.getElementById('totalCourses').textContent=all.length;
+    document.getElementById('coreCourses').textContent=all.filter(c=>c.type==='Core').length;
+    document.getElementById('deptCourses').textContent=[...new Set(all.map(c=>c.dept))].length;
+    document.getElementById('totalCredits').textContent=all.reduce((s,c)=>s+c.credits,0);
+  }
+
+  function render() {
+    const q=document.getElementById('search').value.toLowerCase(), fd=document.getElementById('filterDept').value, fs=document.getElementById('filterSem').value;
+    let data=getData().filter(c=>(!q||c.name.toLowerCase().includes(q)||c.code.toLowerCase().includes(q))&&(!fd||c.dept===fd)&&(!fs||c.semester===+fs));
+    document.getElementById('countBadge').textContent=data.length+' courses';
+    const canEdit=user.role==='admin';
+    const typeColors={Core:'badge-primary',Elective:'badge-info',Lab:'badge-warning'};
+    document.getElementById('tbody').innerHTML=data.map((c,i)=>`
+      <tr>
+        <td style="color:var(--text-muted);font-size:12px">${i+1}</td>
+        <td><span style="font-family:monospace;font-size:12px;font-weight:700;color:var(--primary);background:var(--primary-bg);padding:3px 8px;border-radius:6px">${c.code}</span></td>
+        <td style="font-weight:600;font-size:13px">${c.name}</td>
+        <td style="font-size:12px">${c.dept}</td>
+        <td><span class="badge-custom badge-secondary">${c.credits} cr</span></td>
+        <td><span class="badge-custom badge-secondary">Sem ${c.semester}</span></td>
+        <td>
+          <div class="d-flex align-items-center gap-2">
+            <div class="avatar-sm" style="background:#4f46e5;width:26px;height:26px;font-size:10px">${getInitials(c.faculty)}</div>
+            <span style="font-size:12px">${c.faculty}</span>
+          </div>
+        </td>
+        <td><span class="badge-custom ${typeColors[c.type]||'badge-secondary'}">${c.type}</span></td>
+        <td>${canEdit?`<div class="d-flex gap-1"><button class="btn-custom btn-outline-custom btn-sm-custom btn-icon" onclick="edit(${c.id})"><i class="bi bi-pencil-fill"></i></button><button class="btn-custom btn-danger-custom btn-sm-custom btn-icon" onclick="del(${c.id})"><i class="bi bi-trash-fill"></i></button></div>`:'<span style="color:var(--text-muted);font-size:12px">—</span>'}</td>
+      </tr>`).join('')||`<tr><td colspan="9" class="text-center py-5" style="color:var(--text-muted)"><i class="bi bi-inbox display-6 d-block mb-2"></i>No courses found</td></tr>`;
+    updateSummary();
+  }
+
+  function openModal(data=null) {
+    const facList=DB.get('faculty')||[];
+    document.getElementById('fFaculty').innerHTML=facList.map(f=>`<option>${f.name}</option>`).join('');
+    document.getElementById('modalTitle').innerHTML=`<i class="bi bi-book-fill me-2"></i>${data?'Edit':'Add'} Course`;
+    document.getElementById('fId').value=data?.id||''; document.getElementById('fCode').value=data?.code||'';
+    document.getElementById('fName').value=data?.name||''; document.getElementById('fDept').value=data?.dept||'Computer Science';
+    document.getElementById('fCredits').value=data?.credits||'4'; document.getElementById('fSem').value=data?.semester||'1';
+    document.getElementById('fType').value=data?.type||'Core'; document.getElementById('fFaculty').value=data?.faculty||facList[0]?.name||'';
+    document.getElementById('modal').classList.remove('hidden');
+  }
+  function closeModal(){document.getElementById('modal').classList.add('hidden');}
+  function edit(id){openModal((DB.get('courses')||[]).find(c=>c.id===id));}
+  function save(){
+    const code=document.getElementById('fCode').value.trim(),name=document.getElementById('fName').value.trim();
+    if(!code||!name){toast('Please fill required fields','error');return;}
+    const arr=DB.get('courses')||[],id=document.getElementById('fId').value;
+    const obj={code,name,dept:document.getElementById('fDept').value,credits:+document.getElementById('fCredits').value,semester:+document.getElementById('fSem').value,type:document.getElementById('fType').value,faculty:document.getElementById('fFaculty').value};
+    if(id){const idx=arr.findIndex(c=>c.id===+id);arr[idx]={...arr[idx],...obj};toast('Course updated!');}
+    else{arr.push({id:genId(arr),...obj});toast('Course added!');}
+    DB.set('courses',arr);closeModal();render();
+  }
+  function del(id){if(!confirm('Delete this course?'))return;DB.set('courses',(DB.get('courses')||[]).filter(c=>c.id!==id));toast('Course deleted','error');render();}
+  function toggleSidebar(){document.getElementById('sidebar').classList.toggle('open');document.getElementById('sidebarOverlay').classList.toggle('show');}
+  function closeSidebar(){document.getElementById('sidebar').classList.remove('open');document.getElementById('sidebarOverlay').classList.remove('show');}
+  render();
+</script>
+</body>
+</html>

@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Notices – Amity University Raipur</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="sidebar-overlay" id="sidebarOverlay" onclick="closeSidebar()"></div>
+<div class="app-layout">
+  <aside class="sidebar" id="sidebar"></aside>
+  <div class="main-content">
+    <div class="topbar">
+      <div class="topbar-left">
+        <button class="btn-menu-toggle" onclick="toggleSidebar()"><i class="bi bi-list"></i></button>
+        <div><div class="topbar-title">Notice Board</div><div class="topbar-subtitle">Announcements & updates</div></div>
+      </div>
+      <div class="topbar-right" id="addBtn"></div>
+    </div>
+    <div class="page-content">
+      <div class="row g-3 mb-4">
+        <div class="col-6 col-md-3"><div class="stat-card blue"><div class="stat-icon blue"><i class="bi bi-megaphone-fill"></i></div><div class="stat-value" id="totalN">0</div><div class="stat-label">Total Notices</div></div></div>
+        <div class="col-6 col-md-3"><div class="stat-card red"><div class="stat-icon red"><i class="bi bi-exclamation-triangle-fill"></i></div><div class="stat-value" id="urgentN">0</div><div class="stat-label">Urgent</div></div></div>
+        <div class="col-6 col-md-3"><div class="stat-card green"><div class="stat-icon green"><i class="bi bi-people-fill"></i></div><div class="stat-value" id="allN">0</div><div class="stat-label">For Everyone</div></div></div>
+        <div class="col-6 col-md-3"><div class="stat-card purple"><div class="stat-icon purple"><i class="bi bi-mortarboard-fill"></i></div><div class="stat-value" id="studentN">0</div><div class="stat-label">For Students</div></div></div>
+      </div>
+
+      <div class="search-row mb-3">
+        <div class="search-input-wrap"><i class="bi bi-search"></i><input type="text" class="search-input" id="search" placeholder="Search notices..." oninput="render()"></div>
+        <select class="filter-select" id="filterType" onchange="render()"><option value="">All Types</option><option value="urgent">Urgent</option><option value="info">Info</option><option value="general">General</option></select>
+        <select class="filter-select" id="filterTarget" onchange="render()"><option value="">All Audience</option><option value="all">Everyone</option><option value="students">Students</option><option value="faculty">Faculty</option></select>
+      </div>
+
+      <div id="noticeList"></div>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay hidden" id="modal">
+  <div class="modal-box">
+    <div class="modal-header-custom">
+      <h5 id="modalTitle"><i class="bi bi-megaphone-fill me-2"></i>Add Notice</h5>
+      <button class="modal-close-btn" onclick="closeModal()"><i class="bi bi-x-lg"></i></button>
+    </div>
+    <div class="modal-body-custom">
+      <input type="hidden" id="fId">
+      <div class="row g-3">
+        <div class="col-12"><div class="form-group-custom"><label class="form-label-custom">Title *</label><input id="fTitle" class="form-control-inner" placeholder="Notice title"></div></div>
+        <div class="col-12"><div class="form-group-custom"><label class="form-label-custom">Content *</label><textarea id="fContent" class="form-control-inner" rows="4" placeholder="Notice content..." style="resize:vertical"></textarea></div></div>
+        <div class="col-6"><div class="form-group-custom"><label class="form-label-custom">Type</label>
+          <select id="fType" class="form-control-inner"><option value="general">General</option><option value="info">Info</option><option value="urgent">Urgent</option></select>
+        </div></div>
+        <div class="col-6"><div class="form-group-custom"><label class="form-label-custom">Target Audience</label>
+          <select id="fTarget" class="form-control-inner"><option value="all">Everyone</option><option value="students">Students Only</option><option value="faculty">Faculty Only</option></select>
+        </div></div>
+        <div class="col-6"><div class="form-group-custom"><label class="form-label-custom">Date</label><input type="date" id="fDate" class="form-control-inner"></div></div>
+        <div class="col-6"><div class="form-group-custom"><label class="form-label-custom">Author</label><input id="fAuthor" class="form-control-inner" placeholder="Author / Department"></div></div>
+      </div>
+    </div>
+    <div class="modal-footer-custom">
+      <button class="btn-custom btn-outline-custom" onclick="closeModal()">Cancel</button>
+      <button class="btn-custom btn-primary-custom" onclick="save()"><i class="bi bi-send-fill me-1"></i>Publish Notice</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast-msg" id="toast"></div>
+<script src="app.js"></script>
+<script>
+  const user = Auth.guard();
+  document.getElementById('sidebar').innerHTML = renderSidebar('notices');
+  if(user.role==='admin'||user.role==='faculty') document.getElementById('addBtn').innerHTML='<button class="btn-custom btn-primary-custom" onclick="openModal()"><i class="bi bi-plus-lg"></i><span class="d-none d-sm-inline">Add Notice</span></button>';
+
+  function getData(){return DB.get('notices')||[];}
+
+  const typeConfig={
+    urgent:{label:'Urgent',icon:'bi-exclamation-triangle-fill',badgeClass:'badge-danger',borderColor:'#ef4444',bgColor:'#fff5f5'},
+    info:{label:'Info',icon:'bi-info-circle-fill',badgeClass:'badge-info',borderColor:'#3b82f6',bgColor:'#eff6ff'},
+    general:{label:'General',icon:'bi-bell-fill',badgeClass:'badge-success',borderColor:'#10b981',bgColor:'#f0fdf4'}
+  };
+  const targetConfig={all:{label:'Everyone',icon:'bi-people-fill'},students:{label:'Students',icon:'bi-mortarboard-fill'},faculty:{label:'Faculty',icon:'bi-person-workspace'}};
+
+  function updateStats() {
+    const all=getData();
+    document.getElementById('totalN').textContent=all.length;
+    document.getElementById('urgentN').textContent=all.filter(n=>n.type==='urgent').length;
+    document.getElementById('allN').textContent=all.filter(n=>n.target==='all').length;
+    document.getElementById('studentN').textContent=all.filter(n=>n.target==='students').length;
+  }
+
+  function render() {
+    const q=document.getElementById('search').value.toLowerCase(), ft=document.getElementById('filterType').value, fa=document.getElementById('filterTarget').value;
+    const canEdit=user.role==='admin'||user.role==='faculty';
+    let data=getData().filter(n=>{
+      const visible=n.target==='all'||n.target===user.role||user.role==='admin';
+      return visible&&(!q||n.title.toLowerCase().includes(q)||n.content.toLowerCase().includes(q))&&(!ft||n.type===ft)&&(!fa||n.target===fa);
+    }).sort((a,b)=>b.date.localeCompare(a.date));
+
+    document.getElementById('noticeList').innerHTML=data.length?data.map(n=>{
+      const tc=typeConfig[n.type]||typeConfig.general, tg=targetConfig[n.target]||targetConfig.all;
+      return `<div class="notice-item ${n.type} mb-3" style="border-left-color:${tc.borderColor}">
+        <div class="d-flex justify-content-between align-items-start gap-3">
+          <div class="flex-1">
+            <div class="d-flex flex-wrap gap-2 align-items-center mb-2">
+              <span class="badge-custom ${tc.badgeClass}"><i class="bi ${tc.icon} me-1"></i>${tc.label}</span>
+              <span class="badge-custom badge-secondary"><i class="bi ${tg.icon} me-1"></i>${tg.label}</span>
+              <span style="font-size:11px;color:var(--text-muted)"><i class="bi bi-calendar3 me-1"></i>${formatDate(n.date)}</span>
+            </div>
+            <h6 style="font-size:14px;font-weight:700;color:var(--text);margin-bottom:6px">${n.title}</h6>
+            <p style="font-size:13px;color:var(--text-muted);line-height:1.6;margin:0">${n.content}</p>
+            <div style="font-size:11px;color:var(--text-muted);margin-top:8px"><i class="bi bi-person-fill me-1"></i>${n.author}</div>
+          </div>
+          ${canEdit?`<div class="d-flex flex-column gap-1 flex-shrink-0">
+            <button class="btn-custom btn-outline-custom btn-sm-custom btn-icon" onclick="edit(${n.id})" title="Edit"><i class="bi bi-pencil-fill"></i></button>
+            <button class="btn-custom btn-danger-custom btn-sm-custom btn-icon" onclick="del(${n.id})" title="Delete"><i class="bi bi-trash-fill"></i></button>
+          </div>`:''}
+        </div>
+      </div>`;
+    }).join(''):`<div class="text-center py-5" style="color:var(--text-muted)"><i class="bi bi-inbox display-4 d-block mb-3"></i><div style="font-size:15px;font-weight:600">No notices found</div><div style="font-size:13px;margin-top:4px">Try adjusting your filters</div></div>`;
+    updateStats();
+  }
+
+  function openModal(data=null) {
+    document.getElementById('modalTitle').innerHTML=`<i class="bi bi-megaphone-fill me-2"></i>${data?'Edit':'Add'} Notice`;
+    document.getElementById('fId').value=data?.id||''; document.getElementById('fTitle').value=data?.title||'';
+    document.getElementById('fContent').value=data?.content||''; document.getElementById('fType').value=data?.type||'general';
+    document.getElementById('fTarget').value=data?.target||'all'; document.getElementById('fDate').value=data?.date||new Date().toISOString().split('T')[0];
+    document.getElementById('fAuthor').value=data?.author||user.name;
+    document.getElementById('modal').classList.remove('hidden');
+  }
+  function closeModal(){document.getElementById('modal').classList.add('hidden');}
+  function edit(id){openModal(getData().find(n=>n.id===id));}
+  function save(){
+    const title=document.getElementById('fTitle').value.trim(), content=document.getElementById('fContent').value.trim();
+    if(!title||!content){toast('Please fill required fields','error');return;}
+    const arr=getData(), id=document.getElementById('fId').value;
+    const obj={title,content,type:document.getElementById('fType').value,target:document.getElementById('fTarget').value,date:document.getElementById('fDate').value,author:document.getElementById('fAuthor').value||user.name};
+    if(id){const idx=arr.findIndex(n=>n.id===+id);arr[idx]={...arr[idx],...obj};toast('Notice updated!');}
+    else{arr.push({id:genId(arr),...obj});toast('Notice published!');}
+    DB.set('notices',arr);closeModal();render();
+  }
+  function del(id){if(!confirm('Delete this notice?'))return;DB.set('notices',getData().filter(n=>n.id!==id));toast('Notice deleted','error');render();}
+  function toggleSidebar(){document.getElementById('sidebar').classList.toggle('open');document.getElementById('sidebarOverlay').classList.toggle('show');}
+  function closeSidebar(){document.getElementById('sidebar').classList.remove('open');document.getElementById('sidebarOverlay').classList.remove('show');}
+  render();
+</script>
+</body>
+</html>
